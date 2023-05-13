@@ -1,4 +1,4 @@
-import pandas as pd
+import math
 
 from functions import *
 
@@ -15,7 +15,7 @@ class InterpolationResult:
 
 
 def calculate_finite_differences(result: InterpolationResult):
-    src_table = result.source_table
+    src_table = result.source_table.sort_values('x').reset_index(drop=True)
     n = src_table.shape[0]
 
     fd_table = pd.DataFrame({
@@ -24,7 +24,7 @@ def calculate_finite_differences(result: InterpolationResult):
     })
 
     for i in range(n-1):
-        index = f'delta^{i+1} y_i' if i != 0 else f'delta y_i'
+        index = f'delta^{i+1} y_i'
         new_col = []
         last_col = fd_table[fd_table.columns[-1]]
         for j in range(n-1-i):
@@ -48,15 +48,15 @@ class LagrangeInterpolator(Interpolator):
 
     def process(self, info: InterpolationResult) -> InterpolationResultEntity:
         result = InterpolationResultEntity()
-        src_table = info.source_table
+        src_table = info.source_table.sort_values('x').reset_index(drop=True)
         src_table_x, src_table_y = src_table['x'], src_table['y']
-        n = src_table.shape[0]
+        n = src_table.shape[0] - 1
 
         def lagrange_at(x: float) -> float:
             res = 0.0
-            for i in range(n):
+            for i in range(n+1):
                 mul_i = src_table_y[i]
-                for j in range(n):
+                for j in range(n+1):
                     if i == j:
                         continue
                     mul_i *= (x - src_table_x[j]) / (src_table_x[i] - src_table_x[j])
@@ -68,9 +68,88 @@ class LagrangeInterpolator(Interpolator):
         return result
 
 
+class NewtonInterpolator(Interpolator):
+    name = "newton interpolator"
+
+    @staticmethod
+    def is_equal_dist(table_x: pd.Series, threshold: float = 1e-5) -> bool:
+        vals = table_x.values
+        min_dist = max_dist = vals[1] - vals[0]
+        for i in range(1, table_x.size - 1):
+            dist = vals[i+1] - vals[i]
+            min_dist = min(min_dist, dist)
+            max_dist = max(max_dist, dist)
+        return (max_dist - min_dist) < threshold
+
+    def process(self, info: InterpolationResult) -> InterpolationResultEntity:
+        result = InterpolationResultEntity()
+        src_table = info.source_table.sort_values('x').reset_index(drop=True)
+        finite_diffs_table = info.finite_differences_table
+        src_table_x, src_table_y = src_table['x'], src_table['y']
+        n = src_table.shape[0] - 1
+
+        equal_dist = NewtonInterpolator.is_equal_dist(src_table_x)
+        dist = src_table_x[1] - src_table_x[0] if equal_dist else None
+
+        def newton_at(x: float):
+            if equal_dist:
+                return newton_equal_dist_at(x, dist)
+            else:
+                return newton_non_equal_dist_at(x)
+
+        def newton_non_equal_dist_at(x: float) -> float:
+            res = src_table_x[0]
+            for k in range(1, n+1):
+                add = divided_difference(0, k)
+                for j in range(k):
+                    add *= (x - src_table_x[j])
+                res += add
+            return res
+
+        def divided_difference(i: int, k: int) -> float:
+            if k == 0:
+                return src_table_y[i]
+            return (divided_difference(i+1, k-1) - divided_difference(i, k-1)) / (src_table_x[i+k] - src_table_x[i])
+
+        threshold = src_table_x.min() + (src_table_x.max() - src_table_x.min()) / 2
+
+        def newton_equal_dist_at(x: float, h: float) -> float:
+            if x <= threshold:
+                return newton_left_at((x - src_table_x[0]) / h)
+            else:
+                return newton_right_at((x - src_table_x[n]) / h)
+
+        def newton_left_at(t: float) -> float:
+            res = src_table_y[0]
+            for i in range(1, n+1):
+                add = finite_diffs_table[f'delta^{i} y_i'][0]
+                for j in range(i):
+                    add *= (t - j)
+                add /= math.factorial(i)
+                res += add
+            return res
+
+        def newton_right_at(t: float) -> float:
+            res = src_table_y[n]
+            for i in range(1, n+1):
+                add = finite_diffs_table[f'delta^{i} y_i'][n-i]
+                for j in range(i):
+                    add *= (t + j)
+                add /= math.factorial(i)
+                res += add
+            return res
+
+        newton_at(0.15)
+
+        result.name = "newton polynom"
+        result.function = Function("???", lambda x: newton_at(x))
+        return result
+
+
 def get_all_interpolators() -> list[Interpolator]:
     return [
-        LagrangeInterpolator()
+        LagrangeInterpolator(),
+        NewtonInterpolator()
     ]
 
 
