@@ -68,8 +68,85 @@ class LagrangeInterpolator(Interpolator):
         return result
 
 
+class NewtonInterpolatorWithEqualDistance(Interpolator):
+    name = "newton interpolator with equal distance"
+
+    def process(self, info: InterpolationResult) -> InterpolationResultEntity:
+        result = InterpolationResultEntity()
+        src_table = info.source_table.sort_values('x').reset_index(drop=True)
+        finite_diffs_table = info.finite_differences_table
+        src_table_x, src_table_y = src_table['x'], src_table['y']
+        n = src_table.shape[0] - 1
+
+        h = src_table_x[1] - src_table_x[0]
+
+        threshold = src_table_x.min() + (src_table_x.max() - src_table_x.min()) / 2
+
+        def newton_equal_dist_at(x: float) -> float:
+            if x <= threshold:
+                return newton_left_at((x - src_table_x[0]) / h)
+            else:
+                return newton_right_at((x - src_table_x[n]) / h)
+
+        def newton_left_at(t: float) -> float:
+            res = src_table_y[0]
+            for i in range(1, n + 1):
+                add = finite_diffs_table[f'delta^{i} y_i'][0]
+                for j in range(i):
+                    add *= (t - j)
+                add /= math.factorial(i)
+                res += add
+            return res
+
+        def newton_right_at(t: float) -> float:
+            res = src_table_y[n]
+            for i in range(1, n + 1):
+                add = finite_diffs_table[f'delta^{i} y_i'][n - i]
+                for j in range(i):
+                    add *= (t + j)
+                add /= math.factorial(i)
+                res += add
+            return res
+
+        result.name = "newton polynom"
+        result.function = Function("???", lambda x: newton_equal_dist_at(x))
+        return result
+
+
+class NewtonInterpolatorWithNonEqualDistance(Interpolator):
+    name = "newton interpolator with non equal distance"
+
+    def process(self, info: InterpolationResult) -> InterpolationResultEntity:
+        result = InterpolationResultEntity()
+        src_table = info.source_table.sort_values('x').reset_index(drop=True)
+        src_table_x, src_table_y = src_table['x'], src_table['y']
+        n = src_table.shape[0] - 1
+
+        def newton_non_equal_dist_at(x: float) -> float:
+            res = src_table_x[0]
+            for k in range(1, n + 1):
+                add = divided_difference(0, k)
+                for j in range(k):
+                    add *= (x - src_table_x[j])
+                res += add
+            return res
+
+        def divided_difference(i: int, k: int) -> float:
+            if k == 0:
+                return src_table_y[i]
+            return (divided_difference(i + 1, k - 1) - divided_difference(i, k - 1)) / (
+                        src_table_x[i + k] - src_table_x[i])
+
+        result.name = "newton polynom"
+        result.function = Function("???", lambda x: newton_non_equal_dist_at(x))
+        return result
+
+
 class NewtonInterpolator(Interpolator):
     name = "newton interpolator"
+
+    equal_dist_interpolator: Interpolator = NewtonInterpolatorWithEqualDistance()
+    non_equal_dist_interpolator: Interpolator = NewtonInterpolatorWithNonEqualDistance()
 
     @staticmethod
     def is_equal_dist(table_x: pd.Series, threshold: float = 1e-5) -> bool:
@@ -82,68 +159,13 @@ class NewtonInterpolator(Interpolator):
         return (max_dist - min_dist) < threshold
 
     def process(self, info: InterpolationResult) -> InterpolationResultEntity:
-        result = InterpolationResultEntity()
         src_table = info.source_table.sort_values('x').reset_index(drop=True)
-        finite_diffs_table = info.finite_differences_table
-        src_table_x, src_table_y = src_table['x'], src_table['y']
-        n = src_table.shape[0] - 1
+        equal_dist = NewtonInterpolator.is_equal_dist(src_table['x'])
 
-        equal_dist = NewtonInterpolator.is_equal_dist(src_table_x)
-        dist = src_table_x[1] - src_table_x[0] if equal_dist else None
-
-        def newton_at(x: float):
-            if equal_dist:
-                return newton_equal_dist_at(x, dist)
-            else:
-                return newton_non_equal_dist_at(x)
-
-        def newton_non_equal_dist_at(x: float) -> float:
-            res = src_table_x[0]
-            for k in range(1, n+1):
-                add = divided_difference(0, k)
-                for j in range(k):
-                    add *= (x - src_table_x[j])
-                res += add
-            return res
-
-        def divided_difference(i: int, k: int) -> float:
-            if k == 0:
-                return src_table_y[i]
-            return (divided_difference(i+1, k-1) - divided_difference(i, k-1)) / (src_table_x[i+k] - src_table_x[i])
-
-        threshold = src_table_x.min() + (src_table_x.max() - src_table_x.min()) / 2
-
-        def newton_equal_dist_at(x: float, h: float) -> float:
-            if x <= threshold:
-                return newton_left_at((x - src_table_x[0]) / h)
-            else:
-                return newton_right_at((x - src_table_x[n]) / h)
-
-        def newton_left_at(t: float) -> float:
-            res = src_table_y[0]
-            for i in range(1, n+1):
-                add = finite_diffs_table[f'delta^{i} y_i'][0]
-                for j in range(i):
-                    add *= (t - j)
-                add /= math.factorial(i)
-                res += add
-            return res
-
-        def newton_right_at(t: float) -> float:
-            res = src_table_y[n]
-            for i in range(1, n+1):
-                add = finite_diffs_table[f'delta^{i} y_i'][n-i]
-                for j in range(i):
-                    add *= (t + j)
-                add /= math.factorial(i)
-                res += add
-            return res
-
-        newton_at(0.15)
-
-        result.name = "newton polynom"
-        result.function = Function("???", lambda x: newton_at(x))
-        return result
+        if equal_dist:
+            return self.equal_dist_interpolator.process(info)
+        else:
+            return self.non_equal_dist_interpolator.process(info)
 
 
 def get_all_interpolators() -> list[Interpolator]:
