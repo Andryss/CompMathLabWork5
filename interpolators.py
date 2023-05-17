@@ -237,11 +237,121 @@ class GaussInterpolator(Interpolator):
         return result
 
 
+class StirlingInterpolator(Interpolator):
+    name = "stirling interpolator"
+
+    def process(self, info: InterpolationResult) -> InterpolationResultEntity:
+        src_table = info.source_table.sort_values('x').reset_index(drop=True)
+        finite_diffs_table = info.finite_differences_table
+        src_table_x, src_table_y = src_table['x'], src_table['y']
+
+        if not is_equal_dist(src_table_x):
+            result = InterpolationResultEntityError()
+            result.name = "stirling polynom"
+            result.error = Exception("Can't use stirling interpolator with not equal intervals")
+            return result
+
+        if src_table.shape[0] % 2 == 0:
+            result = InterpolationResultEntityError()
+            result.name = "stirling polynom"
+            result.error = Exception("Can't use stirling interpolator with even number of points")
+            return result
+
+        n = src_table.shape[0] - 1
+        i_center = n // 2
+
+        a = src_table_x[i_center]
+        h = src_table_x[1] - src_table_x[0]
+
+        def stirling_at(x: float) -> float:
+            t = (x - a) / h
+            left_gauss, right_gauss = gauss_left_half_at(t), gauss_right_half_at(t)
+            return left_gauss + (right_gauss - left_gauss) / 2
+
+        def gauss_left_half_at(t: float) -> float:
+            res = src_table_y[i_center]
+            for i in range(1, n + 1):
+                index = (i + 1) // 2
+                add = finite_diffs_table[f'delta^{i} y_i'][i_center - index]
+                for j in range(-index + 1, (i // 2) + 1):
+                    add *= (t + j)
+                add /= math.factorial(i)
+                res += add
+            return res
+
+        def gauss_right_half_at(t: float) -> float:
+            res = src_table_y[i_center]
+            for i in range(1, n + 1):
+                index = i // 2
+                add = finite_diffs_table[f'delta^{i} y_i'][i_center - index]
+                for j in range(-index, (i+1) // 2):
+                    add *= (t + j)
+                add /= math.factorial(i)
+                res += add
+            return res
+
+        result = InterpolationResultEntitySuccess()
+        result.name = "stirling polynom"
+        result.function = Function("???", lambda x: stirling_at(x))
+        return result
+
+
+class BesselInterpolator(Interpolator):
+    name = "bessel interpolator"
+
+    def process(self, info: InterpolationResult) -> InterpolationResultEntity:
+        src_table = info.source_table.sort_values('x').reset_index(drop=True)
+        finite_diffs_table = info.finite_differences_table
+        src_table_x, src_table_y = src_table['x'], src_table['y']
+
+        if not is_equal_dist(src_table_x):
+            result = InterpolationResultEntityError()
+            result.name = "bessel polynom"
+            result.error = Exception("Can't use bessel interpolator with not equal intervals")
+            return result
+
+        if src_table.shape[0] % 2 == 1:
+            result = InterpolationResultEntityError()
+            result.name = "bessel polynom"
+            result.error = Exception("Can't use bessel interpolator with odd number of points")
+            return result
+
+        n = src_table.shape[0] - 1
+        i_center = n // 2
+
+        a = src_table_x[i_center]
+        h = src_table_x[1] - src_table_x[0]
+
+        def bessel_at(x: float) -> float:
+            t = (x - a) / h
+            res = (src_table_y[i_center] + src_table_y[i_center+1])/2
+            for i in range(1, n + 1):
+                index = i // 2
+                add: float
+                if i % 2 == 1:
+                    add = (t - 1/2) * finite_diffs_table[f'delta^{i} y_i'][i_center - index]
+                else:
+                    add = (finite_diffs_table[f'delta^{i} y_i'][i_center - index] +
+                           finite_diffs_table[f'delta^{i} y_i'][i_center - index + 1]) / 2
+                for j in range(i // 2):
+                    add *= (t + j)*(t - j - 1)
+                add /= math.factorial(i)
+                res += add
+            return res
+
+        result = InterpolationResultEntitySuccess()
+        result.name = "bessel polynom"
+        result.function = Function("???", lambda x: bessel_at(x))
+        return result
+
+
 def get_all_interpolators() -> list[Interpolator]:
     return [
         LagrangeInterpolator(),
         NewtonInterpolator(),
-        GaussInterpolator()
+        GaussInterpolator(),
+        StirlingInterpolator(),
+        BesselInterpolator()
     ]
 
 
