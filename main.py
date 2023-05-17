@@ -159,7 +159,7 @@ def show_interpolation_plot(interpolation_result: InterpolationResult, extrapola
 
 
 def print_interpolation_result(interpolation_result: InterpolationResult, extrapolation_point: float):
-    if interpolation_result.source_table.shape[0] < 30:
+    if interpolation_result.source_table.shape[0] < 20:
         pd.set_option('display.expand_frame_repr', False)
 
     print("\nHere is interpolation result:")
