@@ -189,8 +189,14 @@ class GaussInterpolator(Interpolator):
             result.error = Exception("Can't use gauss interpolator with not equal intervals")
             return result
 
-        i_center = (src_table.shape[0] - 1) // 2
-        n_negative = i_center
+        if src_table.shape[0] % 2 == 0:
+            result = InterpolationResultEntityError()
+            result.name = "gauss polynom"
+            result.error = Exception("Can't use gauss interpolator with even number of points")
+            return result
+
+        n = src_table.shape[0] - 1
+        i_center = n // 2
 
         a = src_table_x[i_center]
         h = src_table_x[1] - src_table_x[0]
@@ -205,7 +211,7 @@ class GaussInterpolator(Interpolator):
 
         def gauss_left_half_at(t: float) -> float:
             res = src_table_y[i_center]
-            for i in range(1, 2 * n_negative + 1):
+            for i in range(1, n + 1):
                 index = (i + 1) // 2
                 add = finite_diffs_table[f'delta^{i} y_i'][i_center - index]
                 for j in range(-index + 1, (i // 2) + 1):
@@ -216,7 +222,7 @@ class GaussInterpolator(Interpolator):
 
         def gauss_right_half_at(t: float) -> float:
             res = src_table_y[i_center]
-            for i in range(1, 2*n_negative+2):
+            for i in range(1, n + 1):
                 index = i // 2
                 add = finite_diffs_table[f'delta^{i} y_i'][i_center - index]
                 for j in range(-index, (i+1) // 2):
