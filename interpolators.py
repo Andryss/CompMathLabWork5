@@ -8,7 +8,6 @@ class InterpolationResultEntity:
 
 
 class InterpolationResultEntityError(InterpolationResultEntity):
-    name = "error"
     error: Exception
 
 
@@ -116,7 +115,7 @@ class NewtonInterpolatorWithEqualDistance(Interpolator):
             return res
 
         result = InterpolationResultEntitySuccess()
-        result.name = "newton polynom"
+        result.name = "newton polynom (eq dist)"
         result.function = Function("???", lambda x: newton_equal_dist_at(x))
         return result
 
@@ -145,7 +144,7 @@ class NewtonInterpolatorWithNonEqualDistance(Interpolator):
                         src_table_x[i + k] - src_table_x[i])
 
         result = InterpolationResultEntitySuccess()
-        result.name = "newton polynom"
+        result.name = "newton polynom (non eq dist)"
         result.function = Function("???", lambda x: newton_non_equal_dist_at(x))
         return result
 
@@ -186,6 +185,7 @@ class GaussInterpolator(Interpolator):
 
         if not is_equal_dist(src_table_x):
             result = InterpolationResultEntityError()
+            result.name = "gauss polynom"
             result.error = Exception("Can't use gauss interpolator with not equal intervals")
             return result
 
@@ -216,7 +216,7 @@ class GaussInterpolator(Interpolator):
 
         def gauss_right_half_at(t: float) -> float:
             res = src_table_y[i_center]
-            for i in range(1, 2*n_negative+1):
+            for i in range(1, 2*n_negative+2):
                 index = i // 2
                 add = finite_diffs_table[f'delta^{i} y_i'][i_center - index]
                 for j in range(-index, (i+1) // 2):
