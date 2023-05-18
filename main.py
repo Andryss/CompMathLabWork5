@@ -63,7 +63,9 @@ def read_table_function_from_file() -> TableFunction:
 def get_all_existing_functions() -> list[Function]:
     return [
         Function('sin(x)', lambda x: math.sin(x)),
-        Function('sqrt(x)', lambda x: math.sqrt(x))
+        Function('sqrt(x)', lambda x: math.sqrt(x)),
+        Function('ln(x)', lambda x: math.log(x, math.e)),
+        Function('e^x', lambda x: math.exp(x))
     ]
 
 
