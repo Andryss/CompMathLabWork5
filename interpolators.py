@@ -129,7 +129,7 @@ class NewtonInterpolatorWithNonEqualDistance(Interpolator):
         n = src_table.shape[0] - 1
 
         def newton_non_equal_dist_at(x: float) -> float:
-            res = src_table_x[0]
+            res = src_table_y[0]
             for k in range(1, n + 1):
                 add = divided_difference(0, k)
                 for j in range(k):
