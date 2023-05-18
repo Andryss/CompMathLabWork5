@@ -169,12 +169,14 @@ class NewtonInterpolator(Interpolator):
         src_table = info.source_table.sort_values('x').reset_index(drop=True)
         equal_dist = is_equal_dist(src_table['x'])
 
+        # return self.non_equal_dist_interpolator.process(info)
         if equal_dist:
             return self.equal_dist_interpolator.process(info)
         else:
             return self.non_equal_dist_interpolator.process(info)
 
 
+# noinspection DuplicatedCode
 class GaussInterpolator(Interpolator):
     name = "gauss interpolator"
 
@@ -237,6 +239,7 @@ class GaussInterpolator(Interpolator):
         return result
 
 
+# noinspection DuplicatedCode
 class StirlingInterpolator(Interpolator):
     name = "stirling interpolator"
 
