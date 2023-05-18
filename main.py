@@ -1,3 +1,4 @@
+import math
 import sys
 import warnings
 
@@ -61,7 +62,8 @@ def read_table_function_from_file() -> TableFunction:
 
 def get_all_existing_functions() -> list[Function]:
     return [
-        Function('sin(x)', lambda x: math.sin(x))
+        Function('sin(x)', lambda x: math.sin(x)),
+        Function('sqrt(x)', lambda x: math.sqrt(x))
     ]
 
 
@@ -124,6 +126,28 @@ def print_finite_differences_table(interpolation_result: InterpolationResult):
     print(f'\nFinite differences is: \n{interpolation_result.finite_differences_table}')
 
 
+def print_interpolations(interpolation_result: InterpolationResult, extrapolation_point: float):
+    for interpolation_entity in interpolation_result.interpolation_entities:
+        if isinstance(interpolation_entity, InterpolationResultEntitySuccess):
+            print(f"\nWhen calculating {interpolation_entity.name}:")
+            print(f"extrapolation result for {extrapolation_point} is {interpolation_entity.function.at(extrapolation_point)}")
+        elif isinstance(interpolation_entity, InterpolationResultEntityError):
+            print(f"\nSome error happened when calculating {interpolation_entity.name}:")
+            print(f"{interpolation_entity.error}")
+
+
+def read_bool(text: str) -> bool:
+    line = input(f"{text} [Y/y for YES, NO otherwise]: ").strip().lower()
+    if line == 'y':
+        return True
+    else:
+        return False
+
+
+def read_show_all() -> bool:
+    return read_bool("\nDo you want to see all the plots?")
+
+
 def show_interpolation_plot(interpolation_result: InterpolationResult, extrapolation_point: float):
     warnings.filterwarnings("ignore", category=matplotlib.MatplotlibDeprecationWarning)
 
@@ -136,7 +160,7 @@ def show_interpolation_plot(interpolation_result: InterpolationResult, extrapola
 
             function = interpolation_entity.function
 
-            x_coords = np.linspace(start=x_left, stop=x_right, num=2000)
+            x_coords = np.linspace(start=x_left, stop=x_right, num=1000)
             y_mapping = np.vectorize(lambda x: function.at(x))
             y_coords = y_mapping(x_coords)
 
@@ -144,16 +168,10 @@ def show_interpolation_plot(interpolation_result: InterpolationResult, extrapola
             plt.scatter(x_src, y_src, c='red', label='source points')
 
             extrapolation_result = function.at(extrapolation_point)
-            print(f"\nWhen calculating {interpolation_entity.name}:")
-            print(f"extrapolation result for {extrapolation_point} is {extrapolation_result}")
             plt.scatter(extrapolation_point, extrapolation_result, c='yellow', label='extrapolation')
 
             ax.set_title(interpolation_entity.name)
             ax.legend()
-        elif isinstance(interpolation_entity, InterpolationResultEntityError):
-            error = interpolation_entity.error
-            print(f"\nSome error happened when calculating {interpolation_entity.name}:")
-            print(f"{error}")
 
     plt.show()
 
@@ -165,7 +183,10 @@ def print_interpolation_result(interpolation_result: InterpolationResult, extrap
     print("\nHere is interpolation result:")
     print_source_table(interpolation_result)
     print_finite_differences_table(interpolation_result)
-    show_interpolation_plot(interpolation_result, extrapolation_point)
+    print_interpolations(interpolation_result, extrapolation_point)
+
+    if read_show_all():
+        show_interpolation_plot(interpolation_result, extrapolation_point)
 
 
 def read_extrapolation_point() -> float:
@@ -175,10 +196,6 @@ def read_extrapolation_point() -> float:
 def run():
     try:
         table_function = read_table_function()
-
-        if table_function.table().shape[0] > 20:
-            raise Exception("Too much points (unstable behavior, result not guaranteed)")
-
         interpolation_result = interpolate(table_function)
         extrapolation_point = read_extrapolation_point()
         print_interpolation_result(interpolation_result, extrapolation_point)
