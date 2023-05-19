@@ -91,6 +91,8 @@ def read_table_function_from_existing_function():
         function = functions[int(line)]
         [left, right] = read_interval()
         points_count = read_int_from_console("number of points on the interval")
+        if points_count < 2:
+            raise Exception(f"can't create interval with {points_count} points")
 
         x_coords = np.linspace(start=left, stop=right, num=points_count)
         y_mapping = np.vectorize(lambda x: function.at(x))
